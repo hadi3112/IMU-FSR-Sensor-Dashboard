@@ -1,12 +1,24 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { clampPct } from '../../services/assistCoupling.js';
 import { percentToNemaStepCounts } from '../../services/assistTranslation.js';
+import { POWER_BAR_SEGMENTS } from '../../lib/motorConstants.js';
 
-const SEGMENTS = 100;
-
-function snapPercentToBars(pct) {
+function barsFromPercent(pct) {
   const v = clampPct(pct);
-  return Math.min(100, Math.max(0, Math.round((v / 100) * SEGMENTS)));
+  return Math.min(POWER_BAR_SEGMENTS, Math.max(0, Math.round((v / 100) * POWER_BAR_SEGMENTS)));
+}
+
+function percentFromBars(bars) {
+  return (bars / POWER_BAR_SEGMENTS) * 100;
+}
+
+/**
+ * Horizontal strip: map pointer X across track to lit bar count (immediate, no transition lag).
+ */
+function barsFromClientX(trackEl, clientX) {
+  const r = trackEl.getBoundingClientRect();
+  const t = Math.min(1, Math.max(0, (clientX - r.left) / Math.max(1, r.width)));
+  return Math.min(POWER_BAR_SEGMENTS, Math.max(0, Math.round(t * POWER_BAR_SEGMENTS)));
 }
 
 /**
@@ -22,28 +34,31 @@ export function SegmentedAssistBar({ label, value, sourceLeg, onChange }) {
   const drag = useRef({ active: false, pointerId: 0 });
   const [dragging, setDragging] = useState(false);
 
-  const snappedPct = useMemo(() => snapPercentToBars(value), [value]);
+  const barsLit = useMemo(() => barsFromPercent(value), [value]);
+  const snappedPct = percentFromBars(barsLit);
   const counts = useMemo(() => percentToNemaStepCounts(snappedPct).targetMicrostepCounts, [snappedPct]);
 
-  const valueFromClientY = useCallback((clientY) => {
+  const emitFromEvent = (clientX) => {
     const el = trackRef.current;
-    if (!el) return snappedPct;
-    const r = el.getBoundingClientRect();
-    const t = (clientY - r.top) / r.height;
-    const pct = (1 - t) * 100;
-    return snapPercentToBars(pct);
-  }, [snappedPct]);
+    if (!el) {
+      onChange(percentFromBars(barsFromPercent(value)));
+      return;
+    }
+    const b = barsFromClientX(el, clientX);
+    onChange(percentFromBars(b));
+  };
 
   const onPointerDown = (e) => {
+    if (e.button !== 0) return;
     drag.current = { active: true, pointerId: e.pointerId };
     setDragging(true);
     e.currentTarget.setPointerCapture(e.pointerId);
-    onChange(valueFromClientY(e.clientY));
+    emitFromEvent(e.clientX);
   };
 
   const onPointerMove = (e) => {
     if (!drag.current.active || e.pointerId !== drag.current.pointerId) return;
-    onChange(valueFromClientY(e.clientY));
+    emitFromEvent(e.clientX);
   };
 
   const onPointerUp = (e) => {
@@ -57,54 +72,54 @@ export function SegmentedAssistBar({ label, value, sourceLeg, onChange }) {
     }
   };
 
-  const thumbLeft = `calc(${(snappedPct / 100) * 100}% - 1.5px)`;
+  const thumbLeft = `calc(${(barsLit / POWER_BAR_SEGMENTS) * 100}% - 1px)`;
 
   return (
-    <div className="w-full max-w-4xl rounded-2xl border border-white/10 bg-gradient-to-b from-[#1f1f24] to-[#141416] p-3 shadow-[0_0_40px_rgba(52,199,89,0.06)] ring-1 ring-white/5">
-      <div className="mb-2 flex items-end justify-between gap-3">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8e8e93]">{label}</div>
+    <div className="w-full shrink-0 rounded-lg border border-white/10 bg-gradient-to-b from-[#1a1c1e] to-[#121416] p-2 ring-1 ring-white/5">
+      <div className="mb-1 flex items-end justify-between gap-2">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8e8e93]">{label}</div>
         <div className="text-right">
-          <div className="text-2xl font-semibold tracking-tight text-[#34c759] tabular-nums">{counts}</div>
-          <div className="text-[10px] font-medium text-[#8e8e93]">counts · {snappedPct}%</div>
+          <div className="text-xl font-semibold tabular-nums text-[#34c759]">{counts}</div>
+          <div className="text-[9px] font-medium text-[#6e6e73]">counts</div>
         </div>
       </div>
 
       <div
         ref={trackRef}
-        className="relative mx-auto h-24 w-full max-w-3xl select-none rounded-xl bg-black/55 px-1 py-1.5 ring-1 ring-white/10"
+        className="relative mx-auto h-24 w-full cursor-ew-resize select-none rounded-lg bg-black/50 px-2 py-2 ring-1 ring-white/10 touch-none"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
       >
-        <div className="flex h-full w-full items-stretch justify-between gap-px">
-          {Array.from({ length: SEGMENTS }).map((_, i) => {
-            const active = i < snappedPct;
+        <div className="flex h-full w-full items-stretch justify-center gap-2">
+          {Array.from({ length: POWER_BAR_SEGMENTS }).map((_, i) => {
+            const active = i < barsLit;
             return (
               <div
                 key={i}
-                className={`relative min-w-0 flex-1 rounded-[2px] ${
-                  dragging ? '' : 'transition-[background-color,box-shadow] duration-75'
-                } ${
-                  active
-                    ? 'bg-gradient-to-b from-[#5ef2a0] to-[#1fa34d] shadow-[0_0_10px_rgba(52,199,89,0.35)]'
-                    : 'bg-[#2a2a2e]'
-                }`}
+                className="h-full shrink-0 rounded-full"
+                style={{
+                  width: 4,
+                  minWidth: 4,
+                  backgroundColor: active ? '#2ea043' : 'rgba(255,255,255,0.9)',
+                  opacity: active ? 1 : 0.55,
+                }}
               />
             );
           })}
         </div>
 
         <div
-          className={`pointer-events-none absolute bottom-1.5 top-1.5 w-[2px] rounded-full bg-white shadow-[0_0_14px_rgba(255,255,255,0.45)] ${
+          className={`pointer-events-none absolute bottom-2 top-2 w-px bg-white/80 ${
             dragging ? '' : 'transition-[left] duration-75'
           }`}
           style={{ left: thumbLeft }}
         />
 
-        <div className="pointer-events-none absolute inset-0 rounded-xl bg-gradient-to-b from-white/[0.05] to-transparent" />
+        <div className="pointer-events-none absolute inset-0 rounded-lg ring-1 ring-inset ring-white/[0.04]" />
       </div>
-      <div className="mt-1 text-center text-[10px] text-white/25">{sourceLeg === 'right' ? 'R' : 'L'}</div>
+      <div className="mt-0.5 text-center text-[9px] text-white/30">{sourceLeg === 'right' ? 'R' : 'L'}</div>
     </div>
   );
 }
