@@ -1,23 +1,35 @@
+import { useEffect } from 'react';
 import { usePayloadLog } from '../../context/PayloadLogContext.jsx';
 
 /**
+ * Floating payload log: no backdrop blur or dimming; main UI (power rails) stays fully interactive.
+ *
  * @param {{ open: boolean; onClose: () => void }} props
  */
 export function PayloadPreviewModal({ open, onClose }) {
   const { rows, clear } = usePayloadLog();
 
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-end p-4 sm:items-center sm:justify-center sm:p-6">
-      <button type="button" className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-label="Close" />
+    <div className="pointer-events-none fixed right-2 top-[4.5rem] z-[70] flex w-[min(calc(100vw-1rem),22rem)] max-h-[calc(100dvh-5rem)] flex-col sm:right-4 sm:top-[4.75rem] sm:max-h-[calc(100dvh-5.25rem)] sm:w-[min(calc(100vw-2rem),24rem)]">
       <div
-        className="relative z-10 flex max-h-[min(72vh,640px)] w-full max-w-lg flex-col rounded-[40px] border border-white/10 bg-[#121214] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.65)] ring-1 ring-cyan-900/30"
+        className="pointer-events-auto flex min-h-0 max-h-full flex-col rounded-[40px] border border-white/10 bg-[#121214] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.55)] ring-1 ring-cyan-900/30"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
-        aria-modal="true"
+        aria-modal="false"
+        aria-label="Payload log"
       >
-        <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/10 pb-2">
           <div className="text-[12px] font-bold uppercase tracking-wider text-[#5ee8dc]">View payload</div>
           <div className="flex gap-2">
             <button
@@ -36,7 +48,7 @@ export function PayloadPreviewModal({ open, onClose }) {
             </button>
           </div>
         </div>
-        <div className="mt-2 flex-1 space-y-2 overflow-y-auto pr-1 font-mono text-[10px] leading-relaxed text-[#b8e8e4]">
+        <div className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1 font-mono text-[10px] leading-relaxed text-[#b8e8e4]">
           {rows.length === 0 ? (
             <div className="rounded-2xl bg-black/40 p-3 text-[11px] text-white/45 ring-1 ring-white/5">
               <p className="mb-2 text-white/60">No MQTT motor frames logged yet.</p>

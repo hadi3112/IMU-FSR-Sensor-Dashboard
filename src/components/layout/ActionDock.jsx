@@ -4,10 +4,9 @@
 export function ActionDock({ onRunDiagnostics, onStartSession, diagnosticsPassed }) {
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 z-30 flex items-center justify-center px-4"
+      className="pointer-events-none fixed inset-x-0 z-30 flex justify-center px-[10px]"
       style={{
-        bottom: 'calc(6.5rem + env(safe-area-inset-bottom, 0px))',
-        height: 'min(18vh, 152px)',
+        bottom: 'calc(20px + env(safe-area-inset-bottom, 0px))',
       }}
     >
       <div className="pointer-events-auto flex items-center justify-center gap-4">

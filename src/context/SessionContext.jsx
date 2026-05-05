@@ -34,8 +34,8 @@ export function SessionProvider({ children }) {
     setTopicStates((prev) => ({ ...prev, [topic]: state }));
   }, []);
 
-  const [rightAssist, setRightAssist] = useState(34);
-  const [leftAssist, setLeftAssist] = useState(34);
+  const [rightAssist, setRightAssist] = useState(0);
+  const [leftAssist, setLeftAssist] = useState(0);
   const [couplingRatio, setCouplingRatio] = useState(0.3);
 
   const [batteryPct] = useState(34);

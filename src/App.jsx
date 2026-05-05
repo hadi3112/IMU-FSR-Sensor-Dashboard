@@ -16,9 +16,10 @@ function Shell() {
   const [diagOpen, setDiagOpen] = useState(false);
   const [payloadOpen, setPayloadOpen] = useState(false);
 
+  /** Space for fixed ActionDock (buttons + 10px window padding), independent of hero layout. */
   const bottomPad =
     activeTab === 'devices'
-      ? 'calc(6.5rem + min(18vh, 152px) + 12px + env(safe-area-inset-bottom, 0px))'
+      ? 'calc(20px + 3.75rem + 10px + env(safe-area-inset-bottom, 0px))'
       : 'calc(1.25rem + env(safe-area-inset-bottom, 0px))';
 
   return (
@@ -48,7 +49,7 @@ function Shell() {
       <TabBar />
 
       <main
-        className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-3"
+        className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col overflow-y-auto px-3"
         style={{ paddingBottom: bottomPad }}
       >
         {activeTab === 'devices' && <HeroWorkspace />}
