@@ -1,17 +1,13 @@
 import { useEffect, useRef } from 'react';
 import { useSession } from '../../context/SessionContext.jsx';
+import { usePayloadLog } from '../../context/PayloadLogContext.jsx';
 import { MQTT_TOPICS } from '../../lib/mqttTopics.js';
 import { CommandStreamController } from '../../services/commandStreamController.js';
-import { DualLegAssistPanel } from '../controls/DualLegAssistPanel.jsx';
 
-export function DevicesTab() {
-  const {
-    sessionId,
-    mqttConnected,
-    selectedTopics,
-    rightAssist,
-    leftAssist,
-  } = useSession();
+/** Keeps MQTT motor stream alive whenever broker + stepper topics allow. */
+export function CommandStreamBridge() {
+  const { sessionId, mqttConnected, selectedTopics, rightAssist, leftAssist } = useSession();
+  const { append } = usePayloadLog();
 
   const latest = useRef({ right: rightAssist, left: leftAssist });
   latest.current.right = rightAssist;
@@ -27,14 +23,11 @@ export function DevicesTab() {
       getRightAssist: () => latest.current.right,
       getLeftAssist: () => latest.current.left,
       getSelectedTopics: () => selectedTopics,
+      onPublish: (topic, payload) => append(topic, payload),
     });
     if (mqttConnected && wantsSteppers) controller.start();
     return () => controller.stop();
-  }, [mqttConnected, selectedTopics, sessionId]);
+  }, [append, mqttConnected, selectedTopics, sessionId]);
 
-  return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <DualLegAssistPanel />
-    </div>
-  );
+  return null;
 }

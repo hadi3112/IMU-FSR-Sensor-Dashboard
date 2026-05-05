@@ -1,31 +1,36 @@
 import { useState } from 'react';
 import { SessionProvider, useSession } from './context/SessionContext.jsx';
-import { ExoHeroScene } from './components/hero/ExoHeroScene.jsx';
-import { TelemetryStrip } from './components/layout/TelemetryStrip.jsx';
+import { PayloadLogProvider } from './context/PayloadLogContext.jsx';
 import { TabBar } from './components/layout/TabBar.jsx';
 import { ActionDock } from './components/layout/ActionDock.jsx';
-import { DevicesTab } from './components/tabs/DevicesTab.jsx';
+import { HeroWorkspace } from './components/hero/HeroWorkspace.jsx';
 import { StatsTab } from './components/tabs/StatsTab.jsx';
 import { ProfileTab } from './components/tabs/ProfileTab.jsx';
 import { DiagnosticsModal } from './components/diagnostics/DiagnosticsModal.jsx';
+import { CommandStreamBridge } from './components/devices/CommandStreamBridge.jsx';
+import { ViewPayloadFab } from './components/payload/ViewPayloadFab.jsx';
+import { PayloadPreviewModal } from './components/payload/PayloadPreviewModal.jsx';
 
 function Shell() {
   const { activeTab, diagnosticsPassed, setSessionActive } = useSession();
   const [diagOpen, setDiagOpen] = useState(false);
+  const [payloadOpen, setPayloadOpen] = useState(false);
 
   const bottomPad =
     activeTab === 'devices'
-      ? 'calc(3.5rem + min(20vh, 168px) + 6px)'
-      : 'calc(3.5rem + env(safe-area-inset-bottom, 0px))';
+      ? 'calc(6.5rem + min(18vh, 152px) + 12px + env(safe-area-inset-bottom, 0px))'
+      : 'calc(1.25rem + env(safe-area-inset-bottom, 0px))';
 
   return (
-    <div className="flex h-screen min-h-0 flex-col overscroll-none bg-[radial-gradient(120%_80%_at_50%_-10%,rgba(52,199,89,0.12),transparent_55%),radial-gradient(90%_60%_at_100%_0%,rgba(120,180,255,0.08),transparent_45%),#000000] text-white">
+    <div className="app-shell flex h-screen min-h-0 flex-col overscroll-none text-white">
       <DiagnosticsModal open={diagOpen} onClose={() => setDiagOpen(false)} />
+      <PayloadPreviewModal open={payloadOpen} onClose={() => setPayloadOpen(false)} />
+      <CommandStreamBridge />
 
-      <header className="flex shrink-0 items-center justify-between px-4 pb-1 pt-3">
+      <header className="flex shrink-0 items-center justify-between px-4 pb-0 pt-2">
         <div className="flex items-center gap-2">
-          <span className="inline-block h-2 w-2 rounded-full bg-[#34c759] shadow-[0_0_14px_rgba(52,199,89,0.65)]" />
-          <div className="bg-gradient-to-r from-white to-[#9dd1ff] bg-clip-text text-[14px] font-bold tracking-tight text-transparent">
+          <span className="inline-block h-2 w-2 rounded-full bg-[#5ee8dc] shadow-[0_0_6px_rgba(94,232,220,0.28)]" />
+          <div className="bg-gradient-to-r from-white to-[#7dd3c0] bg-clip-text text-[14px] font-bold tracking-tight text-transparent">
             Stryder
           </div>
         </div>
@@ -40,18 +45,15 @@ function Shell() {
         </button>
       </header>
 
+      <TabBar />
+
       <main
-        className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col gap-2 px-3"
+        className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-3"
         style={{ paddingBottom: bottomPad }}
       >
-        <ExoHeroScene />
-        <TelemetryStrip />
-
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          {activeTab === 'devices' && <DevicesTab />}
-          {activeTab === 'stats' && <StatsTab />}
-          {activeTab === 'profile' && <ProfileTab />}
-        </div>
+        {activeTab === 'devices' && <HeroWorkspace />}
+        {activeTab === 'stats' && <StatsTab />}
+        {activeTab === 'profile' && <ProfileTab />}
       </main>
 
       {activeTab === 'devices' && (
@@ -62,7 +64,7 @@ function Shell() {
         />
       )}
 
-      <TabBar />
+      <ViewPayloadFab onOpen={() => setPayloadOpen(true)} />
     </div>
   );
 }
@@ -70,7 +72,9 @@ function Shell() {
 export function App() {
   return (
     <SessionProvider>
-      <Shell />
+      <PayloadLogProvider>
+        <Shell />
+      </PayloadLogProvider>
     </SessionProvider>
   );
 }

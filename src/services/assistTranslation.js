@@ -1,8 +1,8 @@
 /**
  * UI assist % → motor command translation (skeleton + calibration hooks).
- * NEMA-style stepping: 100 UI bars × 2 microsteps each → 0..200 `targetMicrostepCounts` for firmware pacing.
- * TODO: Replace velocity scaling with calibrated constants from bench testing.
+ * NEMA-style stepping: POWER_BAR_SEGMENTS × MICROSTEPS_PER_BAR → MICROSTEPS_TOTAL.
  */
+import { MICROSTEPS_PER_BAR, MICROSTEPS_TOTAL, POWER_BAR_SEGMENTS } from '../lib/motorConstants.js';
 
 export const DEFAULT_TRANSLATION_CONFIG = {
   percentToStepsBase: 1.8,
@@ -22,14 +22,17 @@ function clamp(n, lo, hi) {
 }
 
 /**
- * Map 0–100% assist to discrete bar fill (0–100) and NEMA-aligned microstep budget (0–200).
+ * Map 0–100% assist to discrete bar fill (0–POWER_BAR_SEGMENTS) and microstep budget (0–MICROSTEPS_TOTAL).
  * @param {number} percent0to100
  */
 export function percentToNemaStepCounts(percent0to100) {
   const p = clamp(percent0to100, 0, 100);
-  const barsLit = Math.min(100, Math.max(0, Math.round((p / 100) * 100)));
-  const targetMicrostepCounts = barsLit * 2;
-  return { barsLit, targetMicrostepCounts };
+  const barsLit = Math.min(
+    POWER_BAR_SEGMENTS,
+    Math.max(0, Math.round((p / 100) * POWER_BAR_SEGMENTS)),
+  );
+  const targetMicrostepCounts = Math.round(barsLit * MICROSTEPS_PER_BAR);
+  return { barsLit, targetMicrostepCounts, segments: POWER_BAR_SEGMENTS };
 }
 
 /**

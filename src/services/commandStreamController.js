@@ -6,10 +6,6 @@ import {
 } from './assistTranslation.js';
 import * as mqttBridge from './mqttBridge.js';
 
-/**
- * High-frequency command streaming. Publishes raw assist (no extra smoothing) plus NEMA microstep counts (0–200).
- */
-
 export class CommandStreamController {
   /**
    * @param {{
@@ -20,6 +16,7 @@ export class CommandStreamController {
    *  getLeftAssist: () => number;
    *  getSelectedTopics: () => string[];
    *  getTranslationConfig?: () => typeof DEFAULT_TRANSLATION_CONFIG;
+   *  onPublish?: (topic: string, payload: Record<string, unknown>) => void;
    * }} opts
    */
   constructor(opts) {
@@ -30,6 +27,7 @@ export class CommandStreamController {
     this.getLeftAssist = opts.getLeftAssist;
     this.getSelectedTopics = opts.getSelectedTopics;
     this.getTranslationConfig = opts.getTranslationConfig ?? (() => DEFAULT_TRANSLATION_CONFIG);
+    this.onPublish = opts.onPublish;
 
     /** @type {ReturnType<typeof setInterval> | null} */
     this.timer = null;
@@ -80,21 +78,21 @@ export class CommandStreamController {
 
       const publishIfSelected = async (topic, leg, pct, pctPrev) => {
         if (!topics.has(topic)) return;
+        const payload = buildPayload(leg, pct, pctPrev);
         try {
           await mqttBridge.mqttPublish({
             topic,
-            payload: buildPayload(leg, pct, pctPrev),
+            payload,
             qos: 0,
             retain: false,
           });
+          this.onPublish?.(topic, payload);
         } catch {
           /* mqtt:error IPC */
         }
       };
 
-      const moved =
-        Math.abs(rawR - this.prevR) > 0.001 ||
-        Math.abs(rawL - this.prevL) > 0.001;
+      const moved = Math.abs(rawR - this.prevR) > 0.001 || Math.abs(rawL - this.prevL) > 0.001;
 
       if (!this.streamWhileStable && !moved) {
         return;

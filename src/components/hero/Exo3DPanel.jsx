@@ -11,7 +11,7 @@ function ExoskeletonGroup() {
   });
 
   return (
-    <group ref={group} scale={0.92}>
+    <group ref={group} scale={0.95}>
       <mesh castShadow receiveShadow position={[0, 0.95, 0]}>
         <boxGeometry args={[0.62, 0.38, 0.26]} />
         <meshStandardMaterial color="#1f1f22" metalness={0.9} roughness={0.28} />
@@ -34,19 +34,20 @@ function ExoskeletonGroup() {
       </mesh>
       <mesh position={[0, 0.15, 0.16]}>
         <torusGeometry args={[0.3, 0.014, 8, 40]} />
-        <meshStandardMaterial color="#34c759" emissive="#0b3d1a" emissiveIntensity={0.45} metalness={0.25} roughness={0.45} />
+        <meshStandardMaterial color="#5ee8dc" emissive="#0a3d40" emissiveIntensity={0.25} metalness={0.25} roughness={0.45} />
       </mesh>
     </group>
   );
 }
 
-export function ExoHeroScene() {
+/** Right half: 3D hero / optics only. */
+export function Exo3DPanel() {
   return (
-    <div className="relative h-[16vh] max-h-[180px] min-h-[110px] w-full shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#0d0d10] to-black shadow-[0_0_60px_rgba(52,199,89,0.06)]">
-      <div className="pointer-events-none absolute inset-0 hero-vignette opacity-80" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black to-transparent" />
+    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-white/10 bg-gradient-to-b from-[#0d0d10] to-black shadow-[0_0_24px_rgba(20,168,160,0.04)]">
+      <div className="pointer-events-none absolute inset-0 opacity-40 hero-vignette" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black to-transparent" />
       <Canvas
-        className="h-full w-full"
+        className="h-full min-h-0 w-full flex-1"
         shadows
         gl={{ antialias: true, alpha: true }}
         camera={{ position: [1.2, 0.75, 1.35], fov: 40 }}
@@ -62,7 +63,7 @@ export function ExoHeroScene() {
           shadow-mapSize-width={768}
           shadow-mapSize-height={768}
         />
-        <pointLight position={[-1.1, 1.2, 0.5]} intensity={0.28} color="#34c759" />
+        <pointLight position={[-1.1, 1.2, 0.5]} intensity={0.16} color="#5ee8dc" />
         <ExoskeletonGroup />
       </Canvas>
     </div>

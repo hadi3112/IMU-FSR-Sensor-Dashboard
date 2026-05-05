@@ -21,7 +21,6 @@
   }
   body {
     font-family: var(--font-sans);
-    background: #000000;
     color: #ffffff;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
@@ -31,14 +30,67 @@
 @layer utilities {
   .glow-green {
     box-shadow:
-      0 0 40px rgba(52, 199, 89, 0.12),
-      0 0 120px rgba(52, 199, 89, 0.06);
+      0 0 20px rgba(52, 199, 89, 0.06),
+      0 0 60px rgba(52, 199, 89, 0.03);
   }
   .hero-vignette {
     background: radial-gradient(
       60% 55% at 50% 45%,
-      rgba(52, 199, 89, 0.08) 0%,
+      rgba(94, 232, 220, 0.05) 0%,
       rgba(0, 0, 0, 0) 65%
     );
+  }
+
+  .app-shell {
+    position: relative;
+    background:
+      radial-gradient(120% 90% at 50% 110%, rgba(70, 90, 95, 0.28) 0%, rgba(18, 20, 22, 0.92) 42%, #0a0a0c 100%),
+      linear-gradient(165deg, #151518 0%, #0d0d10 45%, #0a0b0d 100%);
+  }
+
+  .app-shell::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.175;
+    background:
+      radial-gradient(40% 30% at 20% 30%, rgba(94, 232, 220, 0.04), transparent 60%),
+      radial-gradient(35% 28% at 80% 70%, rgba(60, 140, 160, 0.06), transparent 55%);
+    animation: swirl-drift 18s ease-in-out infinite alternate;
+  }
+
+  .app-shell::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.1;
+    background: repeating-linear-gradient(
+      -18deg,
+      transparent,
+      transparent 120px,
+      rgba(255, 255, 255, 0.01) 120px,
+      rgba(255, 255, 255, 0.01) 121px
+    );
+    animation: wave-slide 24s linear infinite;
+  }
+}
+
+@keyframes swirl-drift {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    transform: translate(-3%, 2%) scale(1.06);
+  }
+}
+
+@keyframes wave-slide {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-80px);
   }
 }
