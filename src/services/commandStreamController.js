@@ -27,13 +27,21 @@ export class CommandStreamController {
   start() {
     if (this.timer) return;
     const tick = async () => {
-      const buildPayload = (targetPos, prevPos) => {
+      const buildDirection = (targetPos, prevPos) => {
+        if (prevPos == null) return 0;
+        if (targetPos > prevPos) return 1;
+        if (targetPos < prevPos) return -1;
+        return 0;
+      };
+      const buildPayload = (rightTargetPos, leftTargetPos, prevRightPos, prevLeftPos) => {
         this.sequence = (this.sequence + 1) >>> 0;
-        const delta = prevPos == null ? 0 : Math.abs(targetPos - prevPos);
         return {
-          t: this.sequence,
-          p: targetPos,
-          s: delta > 0 ? 1 : 0,
+          TR: rightTargetPos,
+          TL: leftTargetPos,
+          CR: prevRightPos ?? 0,
+          CL: prevLeftPos ?? 0,
+          DR: buildDirection(rightTargetPos, prevRightPos),
+          DL: buildDirection(leftTargetPos, prevLeftPos),
         };
       };
       const publish = async (topic, payload) => {
@@ -52,11 +60,9 @@ export class CommandStreamController {
 
       const rightPos = percentToAbsolutePosition(this.getRightAssist());
       const leftPos = percentToAbsolutePosition(this.getLeftAssist());
-      const rightPayload = buildPayload(rightPos, this.prevRightPos);
-      const leftPayload = buildPayload(leftPos, this.prevLeftPos);
+      const payload = buildPayload(rightPos, leftPos, this.prevRightPos, this.prevLeftPos);
 
-      await publish(MQTT_TOPICS.STEPPER_RIGHT_CMD, rightPayload);
-      await publish(MQTT_TOPICS.STEPPER_LEFT_CMD, leftPayload);
+      await publish(MQTT_TOPICS.ESP_STEPPER_STREAM, payload);
 
       this.prevRightPos = rightPos;
       this.prevLeftPos = leftPos;

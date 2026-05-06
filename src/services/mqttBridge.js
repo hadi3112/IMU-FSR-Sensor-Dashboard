@@ -21,6 +21,12 @@ function describePayload(payload) {
   }
   const p = /** @type {Record<string, unknown>} */ (payload);
   const labels = [
+    ['TR', 'TR'],
+    ['TL', 'TL'],
+    ['CR', 'CR'],
+    ['CL', 'CL'],
+    ['DR', 'DR'],
+    ['DL', 'DL'],
     ['t', 'seq'],
     ['cp', 'currentPos'],
     ['tp', 'targetPos'],
@@ -87,6 +93,12 @@ export async function mqttPublish(payload) {
   try {
     const topic = typeof payload?.topic === 'string' ? payload.topic : 'unknown-topic';
     const body = payload?.payload;
+    if (topic === 'esp/stepper' && body && typeof body === 'object') {
+      const p = /** @type {Record<string, unknown>} */ (body);
+      console.info(
+        `[DASH->ESP] esp/stepper TR=${String(p.TR)} TL=${String(p.TL)} CR=${String(p.CR)} CL=${String(p.CL)} DR=${String(p.DR)} DL=${String(p.DL)}`,
+      );
+    }
     console.info(`[MQTT][${fmtNow()}][DASH->ESP] topic=${topic} | ${describePayload(body)}`);
   } catch {
     /* best-effort debug logging */
@@ -112,11 +124,11 @@ export function subscribeMqttMessage(handler) {
   return api.onMqttMessage((msg) => {
     try {
       const parsed = JSON.parse(msg.payload);
-      const isStateTopic = msg.topic === 'stepper/right/state' || msg.topic === 'stepper/left/state';
-      if (isStateTopic) {
+      const isStepperStream = msg.topic === 'esp/stepper';
+      if (isStepperStream) {
         const p = /** @type {Record<string, unknown>} */ (parsed);
         console.info(
-          `[ESP->DASH][STATE] topic=${msg.topic} t=${String(p.t)} cp=${String(p.cp)} tp=${String(p.tp)} ok=${String(p.ok)}`,
+          `[ESP->DASH] esp/stepper TR=${String(p.TR)} TL=${String(p.TL)} CR=${String(p.CR)} CL=${String(p.CL)} DR=${String(p.DR)} DL=${String(p.DL)}`,
         );
       }
       console.info(`[MQTT][${fmtNow()}][ESP->DASH] topic=${msg.topic} | ${describePayload(parsed)}`);

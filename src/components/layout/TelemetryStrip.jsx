@@ -12,8 +12,7 @@ function fmtUptime(totalSec) {
 }
 
 const TOPIC_SHORT = {
-  'stepper/right/state': 'R state',
-  'stepper/left/state': 'L state',
+  'esp/stepper': 'Stepper stream',
 };
 
 export function TelemetryStrip() {

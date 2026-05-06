@@ -8,8 +8,6 @@ const INITIAL_ROWS = /** @type {Row[]} */ ([
   { id: 'wifi', title: 'Wi‑Fi verification (MyPiHotspot)', state: 'pending' },
   { id: 'mqtt', title: 'MQTT session handshake', state: 'pending' },
   { id: 'topics', title: 'Topic subscriptions configured', state: 'pending' },
-  { id: 'health:stepper/right/state', title: 'Device health: stepper/right/state', state: 'pending' },
-  { id: 'health:stepper/left/state', title: 'Device health: stepper/left/state', state: 'pending' },
 ]);
 
 /**
@@ -84,6 +82,9 @@ export function DiagnosticsModal({ open, onClose }) {
     }
   }, [ensureMqttConnected, mqttHost, mqttPort, setDiagnosticsPassed, setSessionActive, upsertRow]);
 
+  const completed = !running && summary !== null;
+  const succeeded = completed && summary?.ok === true;
+
   if (!open) return null;
 
   return (
@@ -101,8 +102,8 @@ export function DiagnosticsModal({ open, onClose }) {
           <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8e8e93]">Pre-session</div>
           <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">Diagnostics & validation</h2>
           <p className="mt-2 text-[13px] leading-relaxed text-[#8e8e93]">
-            Friendly system checks before enabling a walking session. Dashboard validates Pi hotspot connectivity and
-            continuous MQTT state streaming from at least one actuator.
+            Friendly system checks before enabling a walking session. Dashboard validates Pi hotspot connectivity,
+            broker link, and stream wiring on esp/stepper.
           </p>
         </div>
 
@@ -143,25 +144,48 @@ export function DiagnosticsModal({ open, onClose }) {
         )}
 
         <div className="mt-5 flex gap-2">
-          <button
-            type="button"
-            disabled={running}
-            onClick={() => void run()}
-            className="flex-1 rounded-xl bg-white px-3 py-2 text-[13px] font-semibold text-black disabled:opacity-40"
-          >
-            {running ? 'Running…' : 'Run diagnostics'}
-          </button>
-          <button
-            type="button"
-            disabled={running}
-            onClick={resetUi}
-            className="rounded-xl bg-white/10 px-3 py-2 text-[13px] font-semibold text-white ring-1 ring-white/10 disabled:opacity-40"
-          >
-            Reset view
-          </button>
+          {completed ? (
+            <>
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 rounded-xl bg-white px-3 py-2 text-[13px] font-semibold text-black"
+              >
+                Exit Diagnostics
+              </button>
+              {succeeded && (
+                <button
+                  type="button"
+                  onClick={() => void run()}
+                  className="rounded-xl bg-white/10 px-3 py-2 text-[13px] font-semibold text-white ring-1 ring-white/10"
+                >
+                  Rerun
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                disabled={running}
+                onClick={() => void run()}
+                className="flex-1 rounded-xl bg-white px-3 py-2 text-[13px] font-semibold text-black disabled:opacity-40"
+              >
+                {running ? 'Running…' : 'Run diagnostics'}
+              </button>
+              <button
+                type="button"
+                disabled={running}
+                onClick={resetUi}
+                className="rounded-xl bg-white/10 px-3 py-2 text-[13px] font-semibold text-white ring-1 ring-white/10 disabled:opacity-40"
+              >
+                Reset view
+              </button>
+            </>
+          )}
         </div>
 
-        <div className="mt-2 text-[10px] text-white/30">Wi‑Fi → MQTT → continuous stepper state stream health.</div>
+        <div className="mt-2 text-[10px] text-white/30">Wi‑Fi → MQTT → esp/stepper stream readiness.</div>
       </div>
     </div>
   );

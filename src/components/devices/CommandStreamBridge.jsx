@@ -14,7 +14,7 @@ export function CommandStreamBridge() {
 
   useEffect(() => {
     const controller = new CommandStreamController({
-      intervalMs: 20,
+      intervalMs: 1000,
       getRightAssist: () => latest.current.right,
       getLeftAssist: () => latest.current.left,
       onPublish: (topic, payload) => append(topic, payload),
