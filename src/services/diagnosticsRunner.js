@@ -84,16 +84,34 @@ export async function runDiagnosticsPipeline(args) {
   }
 
   /**
-   * @param {string} topic
+   * @param {string} stateTopic
    * @param {number} ms
    */
-  const waitForStateStream = (topic, ms) =>
+  const waitForHealthyState = (stateTopic, ms) =>
     new Promise((resolve) => {
       let settled = false;
-      let packetCount = 0;
+      let consecutiveOk = 0;
+      /** @type {number[]} */
+      let okBuffer = [];
       let lastArrival = 0;
+      const CONTINUITY_GAP_MS = 2500;
+      const REQUIRED_OK_CONSECUTIVE = 3;
+      /** @type {ReturnType<typeof setTimeout> | null} */
+      let inactivityTimer = null;
+      const side = stateTopic.includes('/right/') ? 'RIGHT' : stateTopic.includes('/left/') ? 'LEFT' : stateTopic;
+      const failNoPackets = () => {
+        if (settled) return;
+        settled = true;
+        unsubscribe();
+        resolve({ ok: false, reason: 'Timed out waiting for state packets' });
+      };
+      const restartInactivityTimer = () => {
+        if (inactivityTimer) clearTimeout(inactivityTimer);
+        inactivityTimer = setTimeout(failNoPackets, ms);
+      };
+      restartInactivityTimer();
       const unsubscribe = mqttBridge.subscribeMqttMessage((msg) => {
-        if (settled || msg.topic !== topic) return;
+        if (settled || msg.topic !== stateTopic) return;
         let parsed;
         try {
           parsed = JSON.parse(msg.payload);
@@ -102,7 +120,7 @@ export async function runDiagnosticsPipeline(args) {
         }
         if (!parsed || typeof parsed !== 'object') return;
         const p = /** @type {Record<string, unknown>} */ (parsed);
-        const valid =
+        const hasStateShape =
           Number.isFinite(Number(p.t)) &&
           Number.isFinite(Number(p.cp)) &&
           Number.isFinite(Number(p.tp)) &&
@@ -110,28 +128,37 @@ export async function runDiagnosticsPipeline(args) {
           (p.sp === 0 || p.sp === 1) &&
           (p.m === 0 || p.m === 1) &&
           (p.ok === 0 || p.ok === 1 || p.ok === true || p.ok === false);
-        if (!valid) return;
+        if (!hasStateShape) return;
+        restartInactivityTimer();
+
+        const healthy = p.ok === 1 || p.ok === true || Number(p.ok) === 1;
 
         const now = Date.now();
-        if (lastArrival !== 0 && now - lastArrival > 200) {
-          packetCount = 0;
+        const isStaleGap = lastArrival !== 0 && now - lastArrival > CONTINUITY_GAP_MS;
+        if (isStaleGap) {
+          consecutiveOk = 0;
+          okBuffer = [];
         }
         lastArrival = now;
-        packetCount += 1;
 
-        if (packetCount >= 3) {
+        if (healthy) {
+          consecutiveOk += 1;
+          okBuffer = [...okBuffer, 1].slice(-REQUIRED_OK_CONSECUTIVE);
+        } else {
+          consecutiveOk = 0;
+          okBuffer = [...okBuffer, 0].slice(-REQUIRED_OK_CONSECUTIVE);
+        }
+        console.info(
+          `[HEALTH][${side}] buffer=[${okBuffer.join(',')}] consecutiveOk=${consecutiveOk} t=${String(p.t)} ok=${String(p.ok)}`,
+        );
+
+        if (consecutiveOk >= REQUIRED_OK_CONSECUTIVE) {
           settled = true;
-          clearTimeout(timer);
+          if (inactivityTimer) clearTimeout(inactivityTimer);
           unsubscribe();
           resolve({ ok: true });
         }
       });
-      const timer = setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        unsubscribe();
-        resolve({ ok: false, reason: 'Timed out waiting for continuous state packets' });
-      }, ms);
     });
 
   const rightTopic = MQTT_TOPICS.STEPPER_RIGHT_STATE;
@@ -140,22 +167,25 @@ export async function runDiagnosticsPipeline(args) {
   patch({ id: `health:${leftTopic}`, title: `Device health: ${leftTopic}`, state: 'running' });
 
   const [rightRes, leftRes] = await Promise.all([
-    waitForStateStream(rightTopic, healthTimeoutMs),
-    waitForStateStream(leftTopic, healthTimeoutMs),
+    waitForHealthyState(rightTopic, healthTimeoutMs),
+    waitForHealthyState(leftTopic, healthTimeoutMs),
   ]);
 
   patch({
     id: `health:${rightTopic}`,
     title: `Device health: ${rightTopic}`,
     state: rightRes.ok ? 'ok' : 'fail',
-    detail: rightRes.ok ? 'Continuous state packets verified' : rightRes.reason,
+    detail: rightRes.ok ? 'Healthy state verified (ok=1)' : rightRes.reason,
   });
   patch({
     id: `health:${leftTopic}`,
     title: `Device health: ${leftTopic}`,
     state: leftRes.ok ? 'ok' : 'fail',
-    detail: leftRes.ok ? 'Continuous state packets verified' : leftRes.reason,
+    detail: leftRes.ok ? 'Healthy state verified (ok=1)' : leftRes.reason,
   });
+  console.info(
+    `[HEALTH][RESULT] RIGHT=${rightRes.ok ? 'PASS' : 'FAIL'} LEFT=${leftRes.ok ? 'PASS' : 'FAIL'} OVERALL=${rightRes.ok || leftRes.ok ? 'PASS' : 'FAIL'}`,
+  );
 
   return { ok: rightRes.ok || leftRes.ok };
 }

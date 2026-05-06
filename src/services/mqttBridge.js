@@ -7,6 +7,40 @@ function getApi() {
   return window.stryder ?? null;
 }
 
+function fmtNow() {
+  return new Date().toISOString();
+}
+
+/**
+ * @param {unknown} payload
+ * @returns {string}
+ */
+function describePayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return `raw=${typeof payload === 'string' ? payload : JSON.stringify(payload)}`;
+  }
+  const p = /** @type {Record<string, unknown>} */ (payload);
+  const labels = [
+    ['t', 'seq'],
+    ['cp', 'currentPos'],
+    ['tp', 'targetPos'],
+    ['p', 'targetPosCmd'],
+    ['d', 'dir'],
+    ['sp', 'speedProfile'],
+    ['s', 'speedModeCmd'],
+    ['m', 'moving'],
+    ['ok', 'healthOk'],
+    ['leg', 'leg'],
+    ['targetMicrostepCounts', 'targetMicrostepCounts'],
+    ['targetAssistPercent', 'targetAssistPercent'],
+  ];
+  const parts = labels
+    .filter(([k]) => Object.prototype.hasOwnProperty.call(p, k))
+    .map(([k, label]) => `${label}(${k})=${String(p[k])}`);
+  if (parts.length) return parts.join(' | ');
+  return `keys=${Object.keys(p).join(',')}`;
+}
+
 export function isBridgeAvailable() {
   return Boolean(getApi());
 }
@@ -50,6 +84,13 @@ export async function mqttUnsubscribe(payload) {
 export async function mqttPublish(payload) {
   const api = getApi();
   if (!api) throw new Error('Electron bridge unavailable');
+  try {
+    const topic = typeof payload?.topic === 'string' ? payload.topic : 'unknown-topic';
+    const body = payload?.payload;
+    console.info(`[MQTT][${fmtNow()}][DASH->ESP] topic=${topic} | ${describePayload(body)}`);
+  } catch {
+    /* best-effort debug logging */
+  }
   return api.mqttPublish(payload);
 }
 
@@ -68,7 +109,22 @@ export async function netTestTcp(opts) {
 export function subscribeMqttMessage(handler) {
   const api = getApi();
   if (!api) return () => {};
-  return api.onMqttMessage(handler);
+  return api.onMqttMessage((msg) => {
+    try {
+      const parsed = JSON.parse(msg.payload);
+      const isStateTopic = msg.topic === 'stepper/right/state' || msg.topic === 'stepper/left/state';
+      if (isStateTopic) {
+        const p = /** @type {Record<string, unknown>} */ (parsed);
+        console.info(
+          `[ESP->DASH][STATE] topic=${msg.topic} t=${String(p.t)} cp=${String(p.cp)} tp=${String(p.tp)} ok=${String(p.ok)}`,
+        );
+      }
+      console.info(`[MQTT][${fmtNow()}][ESP->DASH] topic=${msg.topic} | ${describePayload(parsed)}`);
+    } catch {
+      console.info(`[MQTT][${fmtNow()}][ESP->DASH] topic=${msg.topic} | raw=${msg.payload}`);
+    }
+    handler(msg);
+  });
 }
 
 export function subscribeMqttStatus(handler) {

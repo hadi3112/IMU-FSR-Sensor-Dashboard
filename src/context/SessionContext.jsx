@@ -74,6 +74,7 @@ export function SessionProvider({ children }) {
 
   useEffect(() => {
     setDiagnosticsPassed(false);
+    setSessionActive(false);
   }, [selectedTopics, mqttHost, mqttPort]);
 
   useEffect(() => {

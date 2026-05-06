@@ -5,7 +5,7 @@ import { CommandStreamController } from '../../services/commandStreamController.
 
 /** Keeps MQTT motor stream alive whenever broker + stepper topics allow. */
 export function CommandStreamBridge() {
-  const { mqttConnected, rightAssist, leftAssist } = useSession();
+  const { mqttConnected, diagnosticsPassed, sessionActive, rightAssist, leftAssist } = useSession();
   const { append } = usePayloadLog();
 
   const latest = useRef({ right: rightAssist, left: leftAssist });
@@ -19,9 +19,9 @@ export function CommandStreamBridge() {
       getLeftAssist: () => latest.current.left,
       onPublish: (topic, payload) => append(topic, payload),
     });
-    if (mqttConnected) controller.start();
+    if (mqttConnected && diagnosticsPassed && sessionActive) controller.start();
     return () => controller.stop();
-  }, [append, mqttConnected]);
+  }, [append, diagnosticsPassed, mqttConnected, sessionActive]);
 
   return null;
 }

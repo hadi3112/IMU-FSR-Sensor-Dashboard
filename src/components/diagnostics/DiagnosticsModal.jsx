@@ -21,6 +21,7 @@ export function DiagnosticsModal({ open, onClose }) {
     mqttPort,
     connectMqtt,
     mqttConnected,
+    setSessionActive,
     setDiagnosticsPassed,
   } = useSession();
 
@@ -64,13 +65,16 @@ export function DiagnosticsModal({ open, onClose }) {
 
       if (res.ok) {
         setDiagnosticsPassed(true);
+        setSessionActive(false);
         setSummary({ ok: true, text: 'SET UP SUCCESSFUL' });
       } else {
         setDiagnosticsPassed(false);
+        setSessionActive(false);
         setSummary({ ok: false, text: 'Validation incomplete — resolve failed checks and retry.' });
       }
     } catch (e) {
       setDiagnosticsPassed(false);
+      setSessionActive(false);
       setSummary({
         ok: false,
         text: e instanceof Error ? e.message : 'Unexpected diagnostics failure',
@@ -78,7 +82,7 @@ export function DiagnosticsModal({ open, onClose }) {
     } finally {
       setRunning(false);
     }
-  }, [ensureMqttConnected, mqttHost, mqttPort, setDiagnosticsPassed, upsertRow]);
+  }, [ensureMqttConnected, mqttHost, mqttPort, setDiagnosticsPassed, setSessionActive, upsertRow]);
 
   if (!open) return null;
 
