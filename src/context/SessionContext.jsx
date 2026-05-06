@@ -22,7 +22,7 @@ export function SessionProvider({ children }) {
   const [sessionActive, setSessionActive] = useState(false);
 
   const [mqttConnected, setMqttConnected] = useState(false);
-  const [mqttHost, setMqttHost] = useState('192.168.4.1');
+  const [mqttHost, setMqttHost] = useState('10.42.0.1');
   const [mqttPort, setMqttPort] = useState(1883);
   const [mqttReconnect, setMqttReconnect] = useState(true);
   const [mqttClientId, setMqttClientId] = useState('stryder-desktop');

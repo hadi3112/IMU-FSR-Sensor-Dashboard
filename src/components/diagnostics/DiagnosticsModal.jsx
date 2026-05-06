@@ -5,10 +5,11 @@ import { runDiagnosticsPipeline } from '../../services/diagnosticsRunner.js';
 /** @typedef {{ id: string; title: string; detail?: string; state: 'pending'|'running'|'ok'|'fail' }} Row */
 
 const INITIAL_ROWS = /** @type {Row[]} */ ([
-  { id: 'wifi', title: 'Wi‑Fi verification (Galaxy_A12)', state: 'pending' },
-  { id: 'tcp', title: 'Broker reachability (TCP)', state: 'pending' },
+  { id: 'wifi', title: 'Wi‑Fi verification (MyPiHotspot)', state: 'pending' },
   { id: 'mqtt', title: 'MQTT session handshake', state: 'pending' },
   { id: 'topics', title: 'Topic subscriptions configured', state: 'pending' },
+  { id: 'health:stepper/right/state', title: 'Device health: stepper/right/state', state: 'pending' },
+  { id: 'health:stepper/left/state', title: 'Device health: stepper/left/state', state: 'pending' },
 ]);
 
 /**
@@ -18,7 +19,6 @@ export function DiagnosticsModal({ open, onClose }) {
   const {
     mqttHost,
     mqttPort,
-    selectedTopics,
     connectMqtt,
     mqttConnected,
     setDiagnosticsPassed,
@@ -54,16 +54,9 @@ export function DiagnosticsModal({ open, onClose }) {
     setRunning(true);
     setSummary(null);
     try {
-      const healthRows = selectedTopics.map((t) => ({
-        id: `health:${t}`,
-        title: `Device health: ${t}`,
-        state: /** @type {const} */ ('pending'),
-      }));
-      setRows([...INITIAL_ROWS, ...healthRows]);
+      setRows(INITIAL_ROWS);
 
       const res = await runDiagnosticsPipeline({
-        broker: { host: mqttHost, port: Number(mqttPort) },
-        selectedTopics,
         ensureMqttConnected,
         healthTimeoutMs: 6500,
         onRowUpdate: upsertRow,
@@ -71,7 +64,7 @@ export function DiagnosticsModal({ open, onClose }) {
 
       if (res.ok) {
         setDiagnosticsPassed(true);
-        setSummary({ ok: true, text: 'Validation complete — ready for walking session.' });
+        setSummary({ ok: true, text: 'SET UP SUCCESSFUL' });
       } else {
         setDiagnosticsPassed(false);
         setSummary({ ok: false, text: 'Validation incomplete — resolve failed checks and retry.' });
@@ -85,7 +78,7 @@ export function DiagnosticsModal({ open, onClose }) {
     } finally {
       setRunning(false);
     }
-  }, [ensureMqttConnected, mqttHost, mqttPort, selectedTopics, setDiagnosticsPassed, upsertRow]);
+  }, [ensureMqttConnected, mqttHost, mqttPort, setDiagnosticsPassed, upsertRow]);
 
   if (!open) return null;
 
@@ -104,8 +97,8 @@ export function DiagnosticsModal({ open, onClose }) {
           <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8e8e93]">Pre-session</div>
           <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">Diagnostics & validation</h2>
           <p className="mt-2 text-[13px] leading-relaxed text-[#8e8e93]">
-            Friendly system checks before enabling a walking session. Firmware is expected to answer structured health
-            acknowledgements on the same topics you subscribe to.
+            Friendly system checks before enabling a walking session. Dashboard validates Pi hotspot connectivity and
+            continuous MQTT state streaming from at least one actuator.
           </p>
         </div>
 
@@ -164,7 +157,7 @@ export function DiagnosticsModal({ open, onClose }) {
           </button>
         </div>
 
-        <div className="mt-2 text-[10px] text-white/30">Wi‑Fi → TCP → MQTT → topic health (`stryder_health_ack`).</div>
+        <div className="mt-2 text-[10px] text-white/30">Wi‑Fi → MQTT → continuous stepper state stream health.</div>
       </div>
     </div>
   );

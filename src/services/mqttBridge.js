@@ -55,7 +55,7 @@ export async function mqttPublish(payload) {
 
 export async function netValidateRequiredSsid() {
   const api = getApi();
-  if (!api) return { ok: false, ssid: null, required: 'Galaxy_A12', platform: 'web', detail: 'No bridge' };
+  if (!api) return { ok: false, ssid: null, required: 'MyPiHotspot', platform: 'web', detail: 'No bridge' };
   return api.netValidateRequiredSsid();
 }
 

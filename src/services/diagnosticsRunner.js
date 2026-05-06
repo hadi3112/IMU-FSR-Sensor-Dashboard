@@ -1,4 +1,4 @@
-import { buildHealthCheckRequest, parseHealthAck } from '../lib/healthProtocol.js';
+import { MQTT_TOPICS } from '../lib/mqttTopics.js';
 import * as mqttBridge from './mqttBridge.js';
 
 /**
@@ -7,15 +7,13 @@ import * as mqttBridge from './mqttBridge.js';
 
 /**
  * @param {{
- *  broker: { host: string; port: number };
- *  selectedTopics: string[];
  *  ensureMqttConnected: () => Promise<{ ok: boolean; message?: string }>;
  *  healthTimeoutMs?: number;
  *  onRowUpdate: (row: DiagnosticRow) => void;
  * }} args
  */
 export async function runDiagnosticsPipeline(args) {
-  const { broker, selectedTopics, ensureMqttConnected, healthTimeoutMs = 6000, onRowUpdate } = args;
+  const { ensureMqttConnected, healthTimeoutMs = 6000, onRowUpdate } = args;
 
   /** @type {(partial: Partial<DiagnosticRow> & { id: string }) => void} */
   const patch = (partial) => {
@@ -27,12 +25,12 @@ export async function runDiagnosticsPipeline(args) {
     });
   };
 
-  patch({ id: 'wifi', title: 'Wi‑Fi network (Galaxy_A12)', state: 'running' });
+  patch({ id: 'wifi', title: 'Wi‑Fi network (MyPiHotspot)', state: 'running' });
   const wifi = await mqttBridge.netValidateRequiredSsid();
   if (!wifi.ok) {
     patch({
       id: 'wifi',
-      title: 'Wi‑Fi network (Galaxy_A12)',
+      title: 'Wi‑Fi network (MyPiHotspot)',
       state: 'fail',
       detail: `Connected SSID "${wifi.ssid ?? 'unknown'}" does not match required "${wifi.required}".`,
     });
@@ -40,27 +38,9 @@ export async function runDiagnosticsPipeline(args) {
   }
   patch({
     id: 'wifi',
-    title: 'Wi‑Fi network (Galaxy_A12)',
+    title: 'Wi‑Fi network (MyPiHotspot)',
     state: 'ok',
     detail: `SSID verified: ${wifi.ssid}`,
-  });
-
-  patch({ id: 'tcp', title: 'Broker reachability (TCP)', state: 'running' });
-  const tcp = await mqttBridge.netTestTcp({ host: broker.host, port: broker.port, timeoutMs: 4000 });
-  if (!tcp.ok) {
-    patch({
-      id: 'tcp',
-      title: 'Broker reachability (TCP)',
-      state: 'fail',
-      detail: `Cannot reach ${broker.host}:${broker.port} (${tcp.error ?? 'error'})`,
-    });
-    return { ok: false };
-  }
-  patch({
-    id: 'tcp',
-    title: 'Broker reachability (TCP)',
-    state: 'ok',
-    detail: `Socket OK (~${tcp.latencyMs ?? '?'} ms)`,
   });
 
   patch({ id: 'mqtt', title: 'MQTT session handshake', state: 'running' });
@@ -82,30 +62,36 @@ export async function runDiagnosticsPipeline(args) {
   });
 
   patch({ id: 'topics', title: 'Topic subscriptions configured', state: 'running' });
-  if (!selectedTopics.length) {
-    patch({
-      id: 'topics',
-      title: 'Topic subscriptions configured',
-      state: 'fail',
-      detail: 'Select at least one MQTT topic in the panel before validation.',
-    });
-    return { ok: false };
-  }
   patch({
     id: 'topics',
     title: 'Topic subscriptions configured',
     state: 'ok',
-    detail: `${selectedTopics.length} topic(s) selected`,
+    detail: 'Subscribed to stepper/right/state + stepper/left/state',
   });
+  try {
+    await mqttBridge.mqttSubscribe({
+      topics: [MQTT_TOPICS.STEPPER_RIGHT_STATE, MQTT_TOPICS.STEPPER_LEFT_STATE],
+      qos: 0,
+    });
+  } catch (e) {
+    patch({
+      id: 'topics',
+      title: 'Topic subscriptions configured',
+      state: 'fail',
+      detail: e instanceof Error ? e.message : String(e),
+    });
+    return { ok: false };
+  }
 
   /**
    * @param {string} topic
-   * @param {string} requestId
    * @param {number} ms
    */
-  const waitForHealthAck = (topic, requestId, ms) =>
+  const waitForStateStream = (topic, ms) =>
     new Promise((resolve) => {
       let settled = false;
+      let packetCount = 0;
+      let lastArrival = 0;
       const unsubscribe = mqttBridge.subscribeMqttMessage((msg) => {
         if (settled || msg.topic !== topic) return;
         let parsed;
@@ -115,59 +101,61 @@ export async function runDiagnosticsPipeline(args) {
           return;
         }
         if (!parsed || typeof parsed !== 'object') return;
-        if (/** @type {any} */ (parsed).requestId !== requestId) return;
-        settled = true;
-        clearTimeout(timer);
-        unsubscribe();
-        resolve(parseHealthAck(parsed, topic, requestId));
+        const p = /** @type {Record<string, unknown>} */ (parsed);
+        const valid =
+          Number.isFinite(Number(p.t)) &&
+          Number.isFinite(Number(p.cp)) &&
+          Number.isFinite(Number(p.tp)) &&
+          (p.d === 0 || p.d === 1) &&
+          (p.sp === 0 || p.sp === 1) &&
+          (p.m === 0 || p.m === 1) &&
+          (p.ok === 0 || p.ok === 1 || p.ok === true || p.ok === false);
+        if (!valid) return;
+
+        const now = Date.now();
+        if (lastArrival !== 0 && now - lastArrival > 200) {
+          packetCount = 0;
+        }
+        lastArrival = now;
+        packetCount += 1;
+
+        if (packetCount >= 3) {
+          settled = true;
+          clearTimeout(timer);
+          unsubscribe();
+          resolve({ ok: true });
+        }
       });
       const timer = setTimeout(() => {
         if (settled) return;
         settled = true;
         unsubscribe();
-        resolve({ ok: false, reason: 'timeout' });
+        resolve({ ok: false, reason: 'Timed out waiting for continuous state packets' });
       }, ms);
     });
 
-  try {
-    for (const topic of selectedTopics) {
-      const rowId = `health:${topic}`;
-      patch({ id: rowId, title: `Device health: ${topic}`, state: 'running' });
-      const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-      const payload = buildHealthCheckRequest(requestId, topic);
+  const rightTopic = MQTT_TOPICS.STEPPER_RIGHT_STATE;
+  const leftTopic = MQTT_TOPICS.STEPPER_LEFT_STATE;
+  patch({ id: `health:${rightTopic}`, title: `Device health: ${rightTopic}`, state: 'running' });
+  patch({ id: `health:${leftTopic}`, title: `Device health: ${leftTopic}`, state: 'running' });
 
-      try {
-        await mqttBridge.mqttPublish({ topic, payload, qos: 0, retain: false });
-      } catch (e) {
-        patch({
-          id: rowId,
-          title: `Device health: ${topic}`,
-          state: 'fail',
-          detail: e instanceof Error ? e.message : String(e),
-        });
-        return { ok: false };
-      }
+  const [rightRes, leftRes] = await Promise.all([
+    waitForStateStream(rightTopic, healthTimeoutMs),
+    waitForStateStream(leftTopic, healthTimeoutMs),
+  ]);
 
-      const result = await waitForHealthAck(topic, requestId, healthTimeoutMs);
-      if (!result.ok) {
-        patch({
-          id: rowId,
-          title: `Device health: ${topic}`,
-          state: 'fail',
-          detail: result.reason === 'timeout' ? 'Timed out waiting for health payload' : result.reason,
-        });
-        return { ok: false };
-      }
-      patch({
-        id: rowId,
-        title: `Device health: ${topic}`,
-        state: 'ok',
-        detail: 'Health payload verified',
-      });
-    }
-  } finally {
-    /* listeners unregister on completion */
-  }
+  patch({
+    id: `health:${rightTopic}`,
+    title: `Device health: ${rightTopic}`,
+    state: rightRes.ok ? 'ok' : 'fail',
+    detail: rightRes.ok ? 'Continuous state packets verified' : rightRes.reason,
+  });
+  patch({
+    id: `health:${leftTopic}`,
+    title: `Device health: ${leftTopic}`,
+    state: leftRes.ok ? 'ok' : 'fail',
+    detail: leftRes.ok ? 'Continuous state packets verified' : leftRes.reason,
+  });
 
-  return { ok: true };
+  return { ok: rightRes.ok || leftRes.ok };
 }

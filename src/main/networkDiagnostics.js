@@ -4,7 +4,7 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
-const REQUIRED_SSID = 'Galaxy_A12';
+const REQUIRED_SSID = 'MyPiHotspot';
 
 /**
  * Best-effort current Wi‑Fi SSID for pre-session validation.

@@ -2,7 +2,13 @@
  * UI assist % → motor command translation (skeleton + calibration hooks).
  * NEMA-style stepping: POWER_BAR_SEGMENTS × MICROSTEPS_PER_BAR → MICROSTEPS_TOTAL.
  */
-import { MICROSTEPS_PER_BAR, MICROSTEPS_TOTAL, POWER_BAR_SEGMENTS } from '../lib/motorConstants.js';
+import {
+  MICROSTEPS_PER_BAR,
+  MICROSTEPS_TOTAL,
+  POWER_BAR_SEGMENTS,
+  STEPPER_ABSOLUTE_MAX,
+  STEPPER_ABSOLUTE_MIN,
+} from '../lib/motorConstants.js';
 
 export const DEFAULT_TRANSLATION_CONFIG = {
   percentToStepsBase: 1.8,
@@ -33,6 +39,12 @@ export function percentToNemaStepCounts(percent0to100) {
   );
   const targetMicrostepCounts = Math.round(barsLit * MICROSTEPS_PER_BAR);
   return { barsLit, targetMicrostepCounts, segments: POWER_BAR_SEGMENTS };
+}
+
+/** 0-100% UI rail to shared absolute target position (0-199). */
+export function percentToAbsolutePosition(percent0to100) {
+  const p = clamp(percent0to100, 0, 100);
+  return Math.round(STEPPER_ABSOLUTE_MIN + (p / 100) * (STEPPER_ABSOLUTE_MAX - STEPPER_ABSOLUTE_MIN));
 }
 
 /**

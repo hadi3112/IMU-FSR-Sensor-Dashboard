@@ -1,84 +1,42 @@
 import { MQTT_TOPICS } from '../lib/mqttTopics.js';
-import {
-  computeMotorTargetsFromMotion,
-  DEFAULT_TRANSLATION_CONFIG,
-  percentToNemaStepCounts,
-} from './assistTranslation.js';
+import { percentToAbsolutePosition } from './assistTranslation.js';
 import * as mqttBridge from './mqttBridge.js';
 
 export class CommandStreamController {
   /**
    * @param {{
    *  intervalMs?: number;
-   *  streamWhileStable?: boolean;
-   *  getSessionId: () => string;
    *  getRightAssist: () => number;
    *  getLeftAssist: () => number;
-   *  getSelectedTopics: () => string[];
-   *  getTranslationConfig?: () => typeof DEFAULT_TRANSLATION_CONFIG;
    *  onPublish?: (topic: string, payload: Record<string, unknown>) => void;
    * }} opts
    */
   constructor(opts) {
-    this.intervalMs = opts.intervalMs ?? 40;
-    this.streamWhileStable = opts.streamWhileStable ?? true;
-    this.getSessionId = opts.getSessionId;
+    this.intervalMs = opts.intervalMs ?? 20;
     this.getRightAssist = opts.getRightAssist;
     this.getLeftAssist = opts.getLeftAssist;
-    this.getSelectedTopics = opts.getSelectedTopics;
-    this.getTranslationConfig = opts.getTranslationConfig ?? (() => DEFAULT_TRANSLATION_CONFIG);
     this.onPublish = opts.onPublish;
 
     /** @type {ReturnType<typeof setInterval> | null} */
     this.timer = null;
     this.sequence = 0;
-    this.lastTick = performance.now();
-    this.prevR = 0;
-    this.prevL = 0;
+    this.prevRightPos = null;
+    this.prevLeftPos = null;
   }
 
   start() {
     if (this.timer) return;
     const tick = async () => {
-      const now = performance.now();
-      const dtMs = now - this.lastTick;
-      this.lastTick = now;
-
-      const cfg = this.getTranslationConfig();
-      const rawR = this.getRightAssist();
-      const rawL = this.getLeftAssist();
-
-      const topics = new Set(this.getSelectedTopics());
-      const sessionId = this.getSessionId();
-
-      const buildPayload = (leg, pct, pctPrev) => {
-        const { stepIncrement, speedTarget, rate } = computeMotorTargetsFromMotion({
-          percent: pct,
-          percentPrev: pctPrev,
-          dtMs,
-          config: cfg,
-        });
-        const nema = percentToNemaStepCounts(pct);
-        this.sequence = (this.sequence + 1) & 0xffff_ffff;
+      const buildPayload = (targetPos, prevPos) => {
+        this.sequence = (this.sequence + 1) >>> 0;
+        const delta = prevPos == null ? 0 : Math.abs(targetPos - prevPos);
         return {
-          leg,
-          targetAssistPercent: pct,
-          barsLit: nema.barsLit,
-          targetMicrostepCounts: nema.targetMicrostepCounts,
-          nemaStepCounts: nema.targetMicrostepCounts,
-          stepIncrement,
-          speedTarget,
-          uiRate: rate,
-          timestamp: Date.now(),
-          sequence: this.sequence,
-          sessionId,
-          modeFlags: ['assist_stream_v2'],
+          t: this.sequence,
+          p: targetPos,
+          s: delta > 0 ? 1 : 0,
         };
       };
-
-      const publishIfSelected = async (topic, leg, pct, pctPrev) => {
-        if (!topics.has(topic)) return;
-        const payload = buildPayload(leg, pct, pctPrev);
+      const publish = async (topic, payload) => {
         try {
           await mqttBridge.mqttPublish({
             topic,
@@ -92,17 +50,16 @@ export class CommandStreamController {
         }
       };
 
-      const moved = Math.abs(rawR - this.prevR) > 0.001 || Math.abs(rawL - this.prevL) > 0.001;
+      const rightPos = percentToAbsolutePosition(this.getRightAssist());
+      const leftPos = percentToAbsolutePosition(this.getLeftAssist());
+      const rightPayload = buildPayload(rightPos, this.prevRightPos);
+      const leftPayload = buildPayload(leftPos, this.prevLeftPos);
 
-      if (!this.streamWhileStable && !moved) {
-        return;
-      }
+      await publish(MQTT_TOPICS.STEPPER_RIGHT_CMD, rightPayload);
+      await publish(MQTT_TOPICS.STEPPER_LEFT_CMD, leftPayload);
 
-      await publishIfSelected(MQTT_TOPICS.STEPPER_RIGHT, 'right', rawR, this.prevR);
-      await publishIfSelected(MQTT_TOPICS.STEPPER_LEFT, 'left', rawL, this.prevL);
-
-      this.prevR = rawR;
-      this.prevL = rawL;
+      this.prevRightPos = rightPos;
+      this.prevLeftPos = leftPos;
     };
 
     this.timer = setInterval(() => {

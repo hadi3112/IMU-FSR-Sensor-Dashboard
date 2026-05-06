@@ -12,10 +12,8 @@ function fmtUptime(totalSec) {
 }
 
 const TOPIC_SHORT = {
-  'ESP/SSR': 'SSR',
-  'ESP/IMUS': 'IMU',
-  'ESP/stepper_right': 'R step',
-  'ESP/stepper_left': 'L step',
+  'stepper/right/state': 'R state',
+  'stepper/left/state': 'L state',
 };
 
 export function TelemetryStrip() {

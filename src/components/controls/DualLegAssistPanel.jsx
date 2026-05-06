@@ -5,6 +5,7 @@ import { applyCoupledDelta } from '../../services/assistCoupling.js';
 import { SegmentedAssistBar } from './SegmentedAssistBar.jsx';
 
 const RATIO_PRESETS = [0.2, 0.3, 0.4, 0.5, 0.6];
+const MANUAL_OVERRIDE_MS = 240;
 
 function snapToRail(v) {
   const x = Math.min(100, Math.max(0, v));
@@ -23,6 +24,8 @@ export function DualLegAssistPanel() {
 
   const rightRef = useRef(rightAssist);
   const leftRef = useRef(leftAssist);
+  const lastManualRightMs = useRef(0);
+  const lastManualLeftMs = useRef(0);
 
   useEffect(() => {
     rightRef.current = rightAssist;
@@ -31,6 +34,7 @@ export function DualLegAssistPanel() {
 
   const handleRightAbsolute = useCallback(
     (nextR) => {
+      lastManualRightMs.current = Date.now();
       const snappedTarget = snapToRail(nextR);
       const delta = snappedTarget - rightRef.current;
       if (Math.abs(delta) < 0.0001) return;
@@ -43,7 +47,8 @@ export function DualLegAssistPanel() {
       });
       let sr = snapToRail(right);
       let sl = snapToRail(left);
-      if (holdLeft) sl = snapToRail(leftRef.current);
+      const leftInManualOverride = Date.now() - lastManualLeftMs.current < MANUAL_OVERRIDE_MS;
+      if (holdLeft || leftInManualOverride) sl = snapToRail(leftRef.current);
       rightRef.current = sr;
       leftRef.current = sl;
       setRightAssist(sr);
@@ -54,6 +59,7 @@ export function DualLegAssistPanel() {
 
   const handleLeftAbsolute = useCallback(
     (nextL) => {
+      lastManualLeftMs.current = Date.now();
       const snappedTarget = snapToRail(nextL);
       const delta = snappedTarget - leftRef.current;
       if (Math.abs(delta) < 0.0001) return;
@@ -66,7 +72,8 @@ export function DualLegAssistPanel() {
       });
       let sr = snapToRail(right);
       let sl = snapToRail(left);
-      if (holdRight) sr = snapToRail(rightRef.current);
+      const rightInManualOverride = Date.now() - lastManualRightMs.current < MANUAL_OVERRIDE_MS;
+      if (holdRight || rightInManualOverride) sr = snapToRail(rightRef.current);
       rightRef.current = sr;
       leftRef.current = sl;
       setRightAssist(sr);

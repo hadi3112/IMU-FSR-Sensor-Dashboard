@@ -8,7 +8,7 @@ import {
   mqttUnsubscribe,
   mqttLastOptions,
 } from './mqttTransport.js';
-import { getCurrentWifiSsid, isRequiredSsid, testTcpReachable } from './networkDiagnostics.js';
+import { REQUIRED_SSID, getCurrentWifiSsid, isRequiredSsid, testTcpReachable } from './networkDiagnostics.js';
 
 /** @type {() => import('electron').BrowserWindow | null | undefined} */
 let getMainWindow = () => null;
@@ -35,7 +35,7 @@ export function registerIpcHandlers(mainWindowGetter) {
     return {
       ok: isRequiredSsid(ssid),
       ssid,
-      required: 'Galaxy_A12',
+      required: REQUIRED_SSID,
       platform,
       detail: raw?.slice?.(0, 2000),
     };
@@ -49,12 +49,15 @@ export function registerIpcHandlers(mainWindowGetter) {
     }
     return new Promise((resolve) => {
       let settled = false;
+      let firstErrorMessage = null;
       const timer = setTimeout(() => {
         if (settled) return;
         mqttDisconnect();
         finish({
           ok: false,
-          message: 'MQTT connection timed out (check broker host, port, and Wi‑Fi).',
+          message:
+            firstErrorMessage ??
+            `MQTT connection timed out to ${opts.host}:${opts.port} (check hotspot and broker listener).`,
         });
       }, 15000);
 
@@ -77,7 +80,15 @@ export function registerIpcHandlers(mainWindowGetter) {
           sendToRenderer('mqtt:status', { connected: false, closed: true });
         },
         onError: (err) => {
+          firstErrorMessage = firstErrorMessage ?? err.message;
           sendToRenderer('mqtt:error', { message: err.message });
+          if (!mqttIsConnected()) {
+            mqttDisconnect();
+            finish({
+              ok: false,
+              message: `MQTT connect failed for ${opts.host}:${opts.port} - ${err.message}`,
+            });
+          }
         },
         onMessage: (topic, payload) => {
           sendToRenderer('mqtt:message', {
