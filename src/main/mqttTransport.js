@@ -39,13 +39,16 @@ export function mqttConnect(opts, events = {}) {
 
 export function mqttDisconnect() {
   if (client) {
+    const c = client;
+    client = null;
     try {
-      client.removeAllListeners();
-      client.end(true);
+      c.removeAllListeners();
+      // Guard against late async broker errors (e.g. connack timeout) after forced end.
+      c.on('error', () => {});
+      c.end(true);
     } catch {
       /* ignore */
     }
-    client = null;
   }
 }
 
